@@ -1,0 +1,58 @@
+appId: com.hallway.app
+productName: Hallway
+copyright: © 2026 grigoriapps
+
+directories:
+  output: release/${version}
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+asar: true
+
+# Удаляет из сборки переводы интерфейса Chromium на 45 неиспользуемых языков (~40 МБ)
+afterPack: scripts/prune-locales.cjs
+
+mac:
+  category: public.app-category.social-networking
+  # иконки генерируются командой npm run icons
+  icon: build/icon.png
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  artifactName: Hallway-${version}-mac-${arch}.${ext}
+  # "-" = ad-hoc подпись. Иначе electron-builder сам возьмёт первый сертификат из связки ключей
+  # (например, личный «Apple Development») и впишет его в раздаваемое приложение.
+  # Для подписи сертификатом Developer ID укажите его имя здесь или через CSC_NAME.
+  identity: '-'
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+  extendInfo:
+    # macOS 15+: без этой строки система не покажет запрос доступа к локальной сети,
+    # и UDP broadcast / TCP к соседям будут падать с EHOSTUNREACH.
+    NSLocalNetworkUsageDescription: Hallway ищет собеседников и обменивается сообщениями и файлами в вашей локальной сети.
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: Hallway-${version}-win-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  # Обновление и даже удаление не трогают %APPDATA%\Hallway: настройки, история переписки
+  # и полученные файлы остаются на месте.
+  deleteAppDataOnUninstall: false
+  # Установка для всех пользователей требует прав администратора — это нужно,
+  # чтобы установщик добавил разрешающее правило в брандмауэр Windows (build/installer.nsh).
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  include: build/installer.nsh
