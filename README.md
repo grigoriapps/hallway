@@ -74,8 +74,7 @@ npm run dist:win     # .exe installer (NSIS, x64)
 Installers are written to `release/<version>/`.
 
 Detailed documentation — the network protocol, data files, `config.json` settings and troubleshooting —
-is in [README.ru.md](README.ru.md) (in Russian), and the change log is in [CHANGELOG.md](CHANGELOG.md)
-(in Russian).
+is in [README.ru.md](README.ru.md) (in Russian). What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

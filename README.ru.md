@@ -6,7 +6,7 @@
 и общаются напрямую (TCP). Сообщения и файлы, macOS и Windows. Бесплатно, открытый код
 ([лицензия MIT](LICENSE)).
 
-История изменений — [CHANGELOG.md](CHANGELOG.md).
+История изменений — [CHANGELOG.ru.md](CHANGELOG.ru.md).
 
 ## Скачать
 
