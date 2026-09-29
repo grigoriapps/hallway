@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { useApp, useT } from '../state'
 import { compareVersions, displayVersion, errorMessage, lastSeenLabel, platformLabel, statusLabel } from '../format'
 import appIcon from '../assets/app-icon.png'
+import donateQr from '../assets/donate-qr.svg'
+import { DONATE_URL, DONATE_URL_SHORT } from '../donate'
 import {
   backgroundLabel,
   fontLabel,
@@ -12,7 +14,7 @@ import {
   THEME_INFO,
   type ThemeColors
 } from '../appearance'
-import { LOCALES, LOCALE_LABELS, type MessageKey, type Translator } from '../i18n'
+import { LOCALES, LOCALE_LABELS, type Locale, type MessageKey, type Translator } from '../i18n'
 import { playSound } from '../sounds'
 import { whatsNewFor } from '../whats-new'
 import { IconClose, IconPlay } from './Icons'
@@ -37,7 +39,8 @@ import {
 const MAX_NAME_LENGTH = 40
 const IS_MAC = window.api.platform === 'darwin'
 const MOD_KEY = IS_MAC ? '⌘' : 'Ctrl'
-const DEVELOPER_SITE = 'https://grigoriapps.com'
+/** Страница Hallway на сайте — на языке интерфейса; английская лежит без префикса языка */
+const appPageUrl = (locale: Locale) => `https://grigoriapps.com/${locale === 'en' ? '' : `${locale}/`}hallway`
 
 type TabId = 'profile' | 'appearance' | 'notifications' | 'chat' | 'system' | 'network' | 'about'
 
@@ -689,6 +692,7 @@ function AboutTab() {
   const [copied, setCopied] = useState(false)
 
   const version = appInfo.version ? displayVersion(appInfo.version) : '—'
+  const appPage = appPageUrl(t.locale)
 
   const summary = [
     `Hallway ${version}`,
@@ -716,20 +720,44 @@ function AboutTab() {
         )}
       </section>
 
+      <Section title={t('about.donateTitle')}>
+        <div className="donate">
+          <div className="donate-main">
+            <p className="donate-text">{t('about.donateText')}</p>
+            <button
+              className="btn primary"
+              onClick={() => {
+                // main откроет адрес во внешнем браузере — как ссылку «Разработчик»
+                window.open(DONATE_URL, '_blank')
+              }}
+            >
+              {t('about.donateButton')}
+            </button>
+            <p className="hint">{t('about.donateHint')}</p>
+          </div>
+          <figure className="donate-qr">
+            {/* готовая картинка: программа в интернет не ходит */}
+            <img src={donateQr} alt={DONATE_URL_SHORT} width={111} height={111} draggable={false} />
+            <figcaption>{t('about.donateScan')}</figcaption>
+            <div className="donate-url">{DONATE_URL_SHORT}</div>
+          </figure>
+        </div>
+      </Section>
+
       <Section title={t('about.details')}>
         <dl className="kv">
           <dt>{t('about.developer')}</dt>
           <dd>
             <a
               className="link"
-              href={DEVELOPER_SITE}
+              href={appPage}
               onClick={(event) => {
                 event.preventDefault()
                 // main откроет ссылку во внешнем браузере
-                window.open(DEVELOPER_SITE, '_blank')
+                window.open(appPage, '_blank')
               }}
             >
-              grigoriapps.com
+              grigoriapps.com/hallway
             </a>
           </dd>
           <dt>{t('about.email')}</dt>

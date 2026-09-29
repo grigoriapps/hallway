@@ -31,7 +31,8 @@ developer on first launch:
 
 - **Hallway never connects to the internet.** There are no servers, accounts, telemetry, analytics
   or auto-updates. All traffic stays inside your local network: UDP port 41234 (finding colleagues)
-  and TCP port 41235 (messages and files). A browser opens only when you click a link yourself.
+  and TCP port 41235 (messages and files). A browser opens only when you click a link or the "Support" button yourself; the QR code next to that
+  button is a picture built into the app.
 - **Your chat history stays on your computers** — in the app data folder
   (`~/Library/Application Support/Hallway` on macOS, `%APPDATA%\Hallway` on Windows).
 - **Few third-party components:** Electron, React and four fonts (Inter, JetBrains Mono, Nunito,

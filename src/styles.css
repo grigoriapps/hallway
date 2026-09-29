@@ -2444,6 +2444,51 @@ mark.current {
   line-height: 1.45;
 }
 
+/* «Поддержать Hallway»: текст с кнопкой и QR; на узком окне QR переносится под кнопку */
+.donate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+}
+.donate-main {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.donate-text {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  line-height: 1.45;
+}
+.donate .hint {
+  margin-top: 8px;
+}
+.donate-qr {
+  flex: 0 0 auto;
+  margin: 0 auto;
+  text-align: center;
+}
+/* 37 модулей с полем × 3 px: белая подложка своя, поэтому QR читается в любой теме */
+.donate-qr img {
+  display: block;
+  width: 111px;
+  height: 111px;
+  margin: 0 auto;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.donate-qr figcaption {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.donate-url {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-3);
+  user-select: text;
+}
+
 /* ─── группы, языки, кнопки панели: добавлено в 0.2.3 ─── */
 
 .sidebar-header .peer-search {

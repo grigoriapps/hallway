@@ -21,6 +21,7 @@ import { findLinks, findOccurrences } from '../src/text-utils'
 import { compareVersions, displayVersion, formatTime, presenceSubtitle } from '../src/format'
 import { PeerRegistry } from '../electron/peer-registry'
 import { shouldShowWhatsNew, whatsNewFor } from '../src/whats-new'
+import { DONATE_URL, DONATE_URL_SHORT } from '../src/donate'
 import {
   ARRIVAL_MATCH_MS,
   NetworkArrival,
@@ -855,6 +856,21 @@ async function main() {
     const d = defaultSettings(os.tmpdir())
     eq(normalizeSettings({ lastSeenVersion: '1.3.0' }, d).lastSeenVersion, '1.3.0', 'версия сохраняется')
     eq(normalizeSettings({ lastSeenVersion: '<b>' }, d).lastSeenVersion, '', 'мусор отбрасывается')
+  })
+
+  await test('«Поддержать»: короткий адрес сайта и QR-код ровно этого адреса', async () => {
+    eq(DONATE_URL, 'https://grigoriapps.com/go/hallway-donate', 'программа открывает только короткий адрес')
+    eq(DONATE_URL_SHORT, 'grigoriapps.com/go/hallway-donate', 'подпись под QR — без протокола')
+    const qr = require('./generate-donate-qr.cjs') as {
+      donateUrl: () => string
+      renderSvg: (url: string) => Promise<string>
+      TARGET: string
+    }
+    eq(qr.donateUrl(), DONATE_URL, 'скрипт берёт адрес из src/donate.ts')
+    const committed = fs.readFileSync(qr.TARGET, 'utf8')
+    assert(committed === (await qr.renderSvg(DONATE_URL)), 'donate-qr.svg устарел — запустите npm run qr')
+    assert(committed.includes('fill="#ffffff"') && committed.includes('stroke="#000000"'), 'чёрное на белом в любой теме')
+    assert(committed.includes('viewBox="0 0 37 37"'), 'версия 3 (29 модулей) с полем 4 модуля')
   })
 
   fs.rmSync(tmp, { recursive: true, force: true })

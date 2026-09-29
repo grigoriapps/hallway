@@ -2407,6 +2407,35 @@ const MESSAGES = {
     'Nützlich, wenn Sie ein Problem melden möchten.',
     'Útil si necesitas informar de un problema.'
   ],
+  'about.donateTitle': [
+    'Поддержать Hallway',
+    'Support Hallway',
+    'Susțineți Hallway',
+    'Hallway unterstützen',
+    'Apoya Hallway'
+  ],
+  'about.donateText': [
+    'Hallway бесплатный и без рекламы. Если он вам помогает, можно поддержать разработку — сумму выбираете сами.',
+    'Hallway is free and has no ads. If it helps you, you can support its development — you choose the amount.',
+    'Hallway este gratuit și fără reclame. Dacă vă este util, puteți susține dezvoltarea — suma o alegeți dumneavoastră.',
+    'Hallway ist kostenlos und werbefrei. Wenn es Ihnen hilft, können Sie die Entwicklung unterstützen – den Betrag wählen Sie selbst.',
+    'Hallway es gratis y sin anuncios. Si te resulta útil, puedes apoyar su desarrollo: tú eliges la cantidad.'
+  ],
+  'about.donateButton': ['Поддержать', 'Support', 'Susțineți', 'Unterstützen', 'Apoyar'],
+  'about.donateHint': [
+    'Откроется в браузере.',
+    'Opens in your browser.',
+    'Se deschide în browser.',
+    'Wird im Browser geöffnet.',
+    'Se abre en el navegador.'
+  ],
+  'about.donateScan': [
+    'Или наведите камеру телефона',
+    'Or point your phone camera here',
+    'Sau scanați cu camera telefonului',
+    'Oder mit der Handykamera scannen',
+    'O escanéalo con la cámara del móvil'
+  ],
   'about.summaryDeveloper': [
     'Разработчик grigoriapps.com (grigoriapps@gmail.com), {year}',
     'Developer grigoriapps.com (grigoriapps@gmail.com), {year}',

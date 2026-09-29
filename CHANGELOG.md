@@ -7,6 +7,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.3.2] — 2026-09-29
+
+### Added
+
+- **Support Hallway** — a quiet card in "Settings → About": Hallway is free, and anyone who wants
+  to can support its development, choosing the amount themselves. The "Support" button opens
+  grigoriapps.com/go/hallway-donate in the browser; the site forwards to the payment page, so the
+  service can change without an app update. Next to it is a QR code of the same address for paying
+  from a phone when the work computer has no internet. The QR code is a ready-made image inside the
+  app (`npm run qr` redraws it) — Hallway still makes no internet requests of its own, and the QR
+  library is used only while developing. No pop-ups, menu items or reminders.
+
+### Changed
+
+- In "About" the developer link now opens the Hallway page on grigoriapps.com in the interface
+  language (for example grigoriapps.com/ru/hallway) and is labelled **grigoriapps.com/hallway**.
+
 ## [1.3.1] — 2026-09-24
 
 ### Added
@@ -319,5 +336,6 @@ The first public release. Earlier builds were not published.
 - Works only within the local network; between different subnets you need to add IP addresses manually.
 - The Windows part (tray, start at login, system buttons in the title bar) was built and tested on macOS.
 
-[Unreleased]: https://github.com/grigoriapps/hallway/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/grigoriapps/hallway/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/grigoriapps/hallway/releases/tag/v1.3.2
 [1.3.1]: https://github.com/grigoriapps/hallway/releases/tag/v1.3.1
