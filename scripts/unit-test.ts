@@ -291,7 +291,7 @@ async function main() {
   await test('состав группы из сети: проверяются id, имена и лимит участников', () => {
     const info = parseGroupInfo({
       id: 'g-abc',
-      name: ' Группа   А',
+      name: '\u0000Группа   А\u0007',
       members: [
         { id: 'a', name: 'Алиса' },
         { id: 'a', name: 'дубль' },
@@ -367,7 +367,7 @@ async function main() {
     const group = {
       id: 'g-left',
       name: 'Склад',
-      members: [{ id: 'me', name: 'Я' }, { id: 'peer', name: 'Пётр' }],
+      members: [{ id: 'me', name: 'Я' }, { id: 'peer', name: 'Борис' }],
       createdAt: 1,
       rev: 4,
       ownerId: 'me'
@@ -383,7 +383,7 @@ async function main() {
   await test('архив: запись, восстановление, мусор отбрасывается', () => {
     const store = new SettingsStore(path.join(tmp, 'archive.json'), { downloadDir: '/d' })
     store.addArchived({ id: 'g-1', kind: 'group', name: 'Склад', members: 3, reason: 'deleted', at: 5 })
-    store.addArchived({ id: 'peer-1', kind: 'peer', name: 'Пётр', members: 0, reason: 'hidden', at: 6 })
+    store.addArchived({ id: 'peer-1', kind: 'peer', name: 'Борис', members: 0, reason: 'hidden', at: 6 })
     eq(store.isArchived('g-1'), true, 'группа в архиве')
     eq(store.archived().length, 2, 'две записи')
     eq(store.removeArchived('peer-1'), true, 'вернули из архива')
@@ -755,19 +755,19 @@ async function main() {
   await test('реестр коллег хранит версию и не теряет её из-за TCP-приветствия', () => {
     const file = path.join(tmp, 'known-peers.json')
     const registry = new PeerRegistry(file, log)
-    registry.seen({ id: 'yura-1', name: 'Yura', platform: 'win32', version: '1.3.0' }, 1000)
-    registry.seen({ id: 'yura-1', name: 'Yura' }, 2000) // приветствие по TCP версии не знает
-    eq(registry.get('yura-1')?.version, '1.3.0', 'версия сохранилась')
-    registry.seen({ id: 'yura-1', name: 'Yura', version: null }, 1500) // откатился на 1.2
-    eq(registry.get('yura-1')?.version, null, 'клиент до 1.3')
-    eq(registry.lastSeenAt('yura-1'), 2000, 'время «был в сети» не уезжает назад')
-    registry.seen({ id: 'petr-1', name: 'Petr', platform: 'win32', version: '1.2.9' })
+    registry.seen({ id: 'alice-1', name: 'Alice', platform: 'win32', version: '1.3.0' }, 1000)
+    registry.seen({ id: 'alice-1', name: 'Alice' }, 2000) // приветствие по TCP версии не знает
+    eq(registry.get('alice-1')?.version, '1.3.0', 'версия сохранилась')
+    registry.seen({ id: 'alice-1', name: 'Alice', version: null }, 1500) // откатился на 1.2
+    eq(registry.get('alice-1')?.version, null, 'клиент до 1.3')
+    eq(registry.lastSeenAt('alice-1'), 2000, 'время «был в сети» не уезжает назад')
+    registry.seen({ id: 'bob-1', name: 'Bob', platform: 'win32', version: '1.2.9' })
     registry.flush()
     const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as Array<Record<string, unknown>>
     raw.push({ id: 'bad-1', name: 'X', version: '<script>' })
     fs.writeFileSync(file, JSON.stringify(raw))
     const reloaded = new PeerRegistry(file, log)
-    eq(reloaded.get('petr-1')?.version, '1.2.9', 'версия после перезапуска')
+    eq(reloaded.get('bob-1')?.version, '1.2.9', 'версия после перезапуска')
     eq(reloaded.get('bad-1')?.version, null, 'мусор вместо версии отброшен')
   })
   await test('версии: сравнение и «до 1.3»', () => {
@@ -878,38 +878,38 @@ async function main() {
     const file = path.join(tmp, 'read-receipts.json')
     const log = createLogger({ verbose: false }).scope('receipts')
     const a = new ReadReceipts(file, log)
-    a.add('yura', 'm1', '', false)
-    a.add('yura', 'm2', '', false)
-    a.add('petr', 'g1', 'g-team', false)
-    a.add('yura', 'bad id!', '', false)
-    eq(a.ready('yura'), [], 'непросмотренное не отправляется')
+    a.add('alice', 'm1', '', false)
+    a.add('alice', 'm2', '', false)
+    a.add('bob', 'g1', 'g-team', false)
+    a.add('alice', 'bad id!', '', false)
+    eq(a.ready('alice'), [], 'непросмотренное не отправляется')
     a.flush()
 
     // перезапуск до прочтения: раньше отметки жили только в памяти и пропадали
     const b = new ReadReceipts(file, log)
-    eq(b.markSeen('petr', false), [], 'личный чат с Petr — отметок нет')
-    eq(b.markSeen('yura', false), ['yura'], 'открыли чат с Yura')
-    eq(b.ready('yura'), [{ authorId: 'yura', scope: '', ids: ['m1', 'm2'] }], 'готово к отправке')
-    eq(b.authorsWithReady(), ['yura'], 'ждёт только Yura')
+    eq(b.markSeen('bob', false), [], 'личный чат с Bob — отметок нет')
+    eq(b.markSeen('alice', false), ['alice'], 'открыли чат с Alice')
+    eq(b.ready('alice'), [{ authorId: 'alice', scope: '', ids: ['m1', 'm2'] }], 'готово к отправке')
+    eq(b.authorsWithReady(), ['alice'], 'ждёт только Alice')
     b.flush()
 
     // автора не было в сети — отметки ждут его и после ещё одного перезапуска
     const c = new ReadReceipts(file, log)
-    const [batch] = c.ready('yura')
-    c.add('yura', 'm3', '', true)
+    const [batch] = c.ready('alice')
+    c.add('alice', 'm3', '', true)
     c.sent(batch)
-    eq(c.ready('yura'), [{ authorId: 'yura', scope: '', ids: ['m3'] }], 'отправленное убрано, пришедшее во время отправки осталось')
-    eq(c.markSeen('g-team', true), ['petr'], 'группа: отметка автору сообщения')
-    eq(c.ready('petr'), [{ authorId: 'petr', scope: 'g-team', ids: ['g1'] }], 'с id группы')
-    c.sent(c.ready('petr')[0])
-    c.sent(c.ready('yura')[0])
+    eq(c.ready('alice'), [{ authorId: 'alice', scope: '', ids: ['m3'] }], 'отправленное убрано, пришедшее во время отправки осталось')
+    eq(c.markSeen('g-team', true), ['bob'], 'группа: отметка автору сообщения')
+    eq(c.ready('bob'), [{ authorId: 'bob', scope: 'g-team', ids: ['g1'] }], 'с id группы')
+    c.sent(c.ready('bob')[0])
+    c.sent(c.ready('alice')[0])
     eq(c.authorsWithReady(), [], 'всё отправлено')
     c.flush()
     assert(!fs.existsSync(file), 'пустая очередь — файла нет')
 
     const d = new ReadReceipts(file, log)
-    for (let i = 0; i < MAX_RECEIPT_IDS + 20; i++) d.add('mm', `x${i}`, '', true)
-    const ids = d.ready('mm')[0].ids
+    for (let i = 0; i < MAX_RECEIPT_IDS + 20; i++) d.add('carol', `x${i}`, '', true)
+    const ids = d.ready('carol')[0].ids
     eq(ids.length, MAX_RECEIPT_IDS, 'в пакете не больше, чем принимает получатель')
     eq(ids.at(-1), `x${MAX_RECEIPT_IDS + 19}`, 'остаются самые свежие')
     d.clear()
