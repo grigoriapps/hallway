@@ -26,6 +26,7 @@ import {
   HISTORY_RETENTIONS,
   MESSAGE_FONT_SIZE,
   MESSAGE_TONES,
+  REMIND_MINUTES,
   THEMES,
   UI_SCALE,
   type AutoAcceptMode,
@@ -446,6 +447,22 @@ function NotificationsTab() {
             hint={t('settings.presenceSoundHint')}
           />
         </div>
+      </Section>
+
+      <Section title={t('settings.remind')}>
+        <select
+          className="select"
+          aria-label={t('settings.remind')}
+          value={n.remindMinutes}
+          onChange={(e) => update({ notifications: { remindMinutes: Number(e.target.value) } })}
+        >
+          {REMIND_MINUTES.map((minutes) => (
+            <option key={minutes} value={minutes}>
+              {minutes === 0 ? t('settings.remindOff') : t('settings.remindEvery', { n: minutes })}
+            </option>
+          ))}
+        </select>
+        <p className="hint">{t('settings.remindHint')}</p>
       </Section>
 
       <Section title={t('settings.messageTone')}>

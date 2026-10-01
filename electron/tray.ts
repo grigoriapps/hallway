@@ -1,5 +1,6 @@
 import { Menu, Tray, nativeImage, type MenuItemConstructorOptions } from 'electron'
 import trayIconPath from '../build/icon.ico?asset'
+import trayUnreadIconPath from '../build/tray-unread.ico?asset'
 import { PRESENCE_STATUSES, type PresenceStatus } from '../src/types'
 import type { TranslateFn } from '../src/i18n'
 
@@ -40,6 +41,8 @@ interface TrayCallbacks {
 /** Значок в трее Windows: приложение продолжает работать, когда окно закрыто */
 export class TrayController {
   private tray: Tray | null = null
+  /** непрочитанных сообщений: значок с красной точкой и число в подсказке */
+  private unread = 0
 
   constructor(private readonly callbacks: TrayCallbacks) {}
 
@@ -49,7 +52,7 @@ export class TrayController {
 
   enable(): void {
     if (this.tray) return
-    this.tray = new Tray(nativeImage.createFromPath(trayIconPath))
+    this.tray = new Tray(this.icon())
     this.tray.on('click', () => this.callbacks.onShow())
     this.tray.on('double-click', () => this.callbacks.onShow())
     this.refresh()
@@ -60,11 +63,28 @@ export class TrayController {
     this.tray = null
   }
 
+  /** Сколько непрочитанных: 0 — обычный значок, больше — с красной точкой */
+  setUnread(count: number): void {
+    if (count === this.unread) return
+    const iconChanged = count > 0 !== this.unread > 0
+    this.unread = count
+    if (!this.tray) return
+    if (iconChanged) this.tray.setImage(this.icon())
+    this.refresh()
+  }
+
+  private icon(): Electron.NativeImage {
+    return nativeImage.createFromPath(this.unread > 0 ? trayUnreadIconPath : trayIconPath)
+  }
+
   refresh(): void {
     if (!this.tray) return
     const t = this.callbacks.t
     const state = this.callbacks.getStatus()
-    this.tray.setToolTip(t('tray.tooltip', { status: statusLabel(t, state.status) }))
+    const status = statusLabel(t, state.status)
+    this.tray.setToolTip(
+      this.unread > 0 ? t('tray.tooltipUnread', { status, count: this.unread }) : t('tray.tooltip', { status })
+    )
     this.tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: t('tray.open'), click: () => this.callbacks.onShow() },

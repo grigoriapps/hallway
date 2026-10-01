@@ -81,7 +81,8 @@ const initialState: AppState = {
       messageTone: 'chime',
       groupTone: 'drop',
       everyoneTone: 'marimba',
-      presenceSound: true
+      presenceSound: true,
+      remindMinutes: 5
     },
     sendKey: 'enter',
     historyRetention: '30d',

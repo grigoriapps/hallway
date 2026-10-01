@@ -1517,6 +1517,15 @@ const MESSAGES = {
     'An alle: {text}',
     'A todos: {text}'
   ],
+  'notify.remindTitle': [
+    'Непрочитанное в Hallway',
+    'Unread in Hallway',
+    'Necitite în Hallway',
+    'Ungelesen in Hallway',
+    'Sin leer en Hallway'
+  ],
+  'notify.remindOne': ['{name}: {text}', '{name}: {text}', '{name}: {text}', '{name}: {text}', '{name}: {text}'],
+  'notify.remindChat': ['{name} ({count})', '{name} ({count})', '{name} ({count})', '{name} ({count})', '{name} ({count})'],
   'notify.filePrefix': ['Файл: {name}', 'File: {name}', 'Fișier: {name}', 'Datei: {name}', 'Archivo: {name}'],
   'notify.groupPrefix': ['{name}: {text}', '{name}: {text}', '{name}: {text}', '{name}: {text}', '{name}: {text}'],
 
@@ -1855,6 +1864,20 @@ const MESSAGES = {
     'Hallway – {status}',
     'Hallway: {status}'
   ],
+  'tray.tooltipUnread': [
+    'Hallway — {status} · непрочитанных: {count}',
+    'Hallway — {status} · unread: {count}',
+    'Hallway — {status} · necitite: {count}',
+    'Hallway — {status} · ungelesen: {count}',
+    'Hallway – {status} · sin leer: {count}'
+  ],
+  'taskbar.unread': [
+    'Непрочитанных: {count}',
+    'Unread: {count}',
+    'Necitite: {count}',
+    'Ungelesen: {count}',
+    'Sin leer: {count}'
+  ],
   'tray.hintTitle': [
     'Hallway работает в фоне',
     'Hallway keeps running',
@@ -2060,6 +2083,28 @@ const MESSAGES = {
     ' Sunetul mesajelor este oprit mai sus.',
     ' Der Nachrichtenton ist oben gerade ausgeschaltet.',
     ' Ahora mismo el sonido de mensajes está desactivado más arriba.'
+  ],
+  'settings.remind': [
+    'Напоминать о непрочитанном',
+    'Remind about unread messages',
+    'Reamintire despre mesajele necitite',
+    'An Ungelesenes erinnern',
+    'Recordar lo no leído'
+  ],
+  'settings.remindEvery': [
+    'Каждые {n} минут',
+    'Every {n} minutes',
+    'La fiecare {n} minute',
+    'Alle {n} Minuten',
+    'Cada {n} minutos'
+  ],
+  'settings.remindOff': ['Не напоминать', 'Don’t remind', 'Nu reaminti', 'Nicht erinnern', 'No recordar'],
+  'settings.remindHint': [
+    'Пока сообщение не прочитано, звук и уведомление повторятся — не больше трёх раз. Если вы отходили от компьютера, напоминание прозвучит, когда вернётесь. В режиме «Не беспокоить» напоминаний нет.',
+    'While a message stays unread, the sound and notification repeat — at most three times. If you were away from the computer, the reminder plays when you come back. No reminders in “Do not disturb”.',
+    'Cât timp un mesaj rămâne necitit, sunetul și notificarea se repetă — de cel mult trei ori. Dacă ați fost departe de computer, reamintirea se aude când reveniți. În modul „Nu deranja” nu există reamintiri.',
+    'Solange eine Nachricht ungelesen ist, wiederholen sich Ton und Benachrichtigung – höchstens dreimal. Waren Sie vom Computer weg, erklingt die Erinnerung, sobald Sie zurück sind. Bei „Nicht stören“ gibt es keine Erinnerungen.',
+    'Mientras un mensaje siga sin leer, el sonido y la notificación se repiten, como máximo tres veces. Si te alejaste del ordenador, el recordatorio sonará cuando vuelvas. En «No molestar» no hay recordatorios.'
   ],
   'settings.presencePreview': [
     'Прослушать появление и выход',

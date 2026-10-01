@@ -7,6 +7,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.3.3] — 2026-09-30
+
+### Added
+
+- **Reminders about unread messages.** A single sound is easy to miss — headphones off, quiet
+  speakers, the window hidden in the tray. While a message stays unread, the sound and notification
+  repeat every few minutes, at most three times after the latest message. If you were away from the
+  computer ("Away" by inactivity or a locked screen), one reminder plays as soon as you are back.
+  No reminders in "Do not disturb" or while the Hallway window is in front of you. The interval is in
+  "Settings → Notifications → Remind about unread messages": every 2, 5 (default), 10 or 15 minutes,
+  or never.
+- **Unread messages are visible on Windows without opening the window:** the tray icon gets a red dot
+  (its tooltip shows how many are unread), and so does the Hallway button on the taskbar.
+
+### Fixed
+
+- **"Read" receipts no longer get lost.** Receipts that had not been sent yet lived only in memory: if
+  Hallway restarted between a message arriving and being read (for example the computer was turned off
+  overnight), or the author was offline at the moment of reading, the author kept seeing a single tick
+  forever. Now the queue is kept in `read-receipts.json` and goes out as soon as the author is online.
+  The packet format is unchanged, so authors on 1.3.x get the late receipts too. This helps once the
+  **reader** has 1.3.3.
+
 ## [1.3.2] — 2026-09-29
 
 ### Added
@@ -336,6 +359,7 @@ The first public release. Earlier builds were not published.
 - Works only within the local network; between different subnets you need to add IP addresses manually.
 - The Windows part (tray, start at login, system buttons in the title bar) was built and tested on macOS.
 
-[Unreleased]: https://github.com/grigoriapps/hallway/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/grigoriapps/hallway/compare/v1.3.3...HEAD
+[1.3.3]: https://github.com/grigoriapps/hallway/releases/tag/v1.3.3
 [1.3.2]: https://github.com/grigoriapps/hallway/releases/tag/v1.3.2
 [1.3.1]: https://github.com/grigoriapps/hallway/releases/tag/v1.3.1

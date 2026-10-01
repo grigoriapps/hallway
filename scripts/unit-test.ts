@@ -20,6 +20,7 @@ import { isValidGroupId, parseEveryoneMeta, parseGroupInfo, parseReplyRef, parse
 import { findLinks, findOccurrences } from '../src/text-utils'
 import { compareVersions, displayVersion, formatTime, presenceSubtitle } from '../src/format'
 import { PeerRegistry } from '../electron/peer-registry'
+import { MAX_RECEIPT_IDS, ReadReceipts } from '../electron/read-receipts'
 import { shouldShowWhatsNew, whatsNewFor } from '../src/whats-new'
 import { DONATE_URL, DONATE_URL_SHORT } from '../src/donate'
 import {
@@ -871,6 +872,68 @@ async function main() {
     assert(committed === (await qr.renderSvg(DONATE_URL)), 'donate-qr.svg устарел — запустите npm run qr')
     assert(committed.includes('fill="#ffffff"') && committed.includes('stroke="#000000"'), 'чёрное на белом в любой теме')
     assert(committed.includes('viewBox="0 0 37 37"'), 'версия 3 (29 модулей) с полем 4 модуля')
+  })
+
+  await test('«Прочитано»: очередь переживает перезапуск и ждёт, пока автор появится', () => {
+    const file = path.join(tmp, 'read-receipts.json')
+    const log = createLogger({ verbose: false }).scope('receipts')
+    const a = new ReadReceipts(file, log)
+    a.add('yura', 'm1', '', false)
+    a.add('yura', 'm2', '', false)
+    a.add('petr', 'g1', 'g-team', false)
+    a.add('yura', 'bad id!', '', false)
+    eq(a.ready('yura'), [], 'непросмотренное не отправляется')
+    a.flush()
+
+    // перезапуск до прочтения: раньше отметки жили только в памяти и пропадали
+    const b = new ReadReceipts(file, log)
+    eq(b.markSeen('petr', false), [], 'личный чат с Petr — отметок нет')
+    eq(b.markSeen('yura', false), ['yura'], 'открыли чат с Yura')
+    eq(b.ready('yura'), [{ authorId: 'yura', scope: '', ids: ['m1', 'm2'] }], 'готово к отправке')
+    eq(b.authorsWithReady(), ['yura'], 'ждёт только Yura')
+    b.flush()
+
+    // автора не было в сети — отметки ждут его и после ещё одного перезапуска
+    const c = new ReadReceipts(file, log)
+    const [batch] = c.ready('yura')
+    c.add('yura', 'm3', '', true)
+    c.sent(batch)
+    eq(c.ready('yura'), [{ authorId: 'yura', scope: '', ids: ['m3'] }], 'отправленное убрано, пришедшее во время отправки осталось')
+    eq(c.markSeen('g-team', true), ['petr'], 'группа: отметка автору сообщения')
+    eq(c.ready('petr'), [{ authorId: 'petr', scope: 'g-team', ids: ['g1'] }], 'с id группы')
+    c.sent(c.ready('petr')[0])
+    c.sent(c.ready('yura')[0])
+    eq(c.authorsWithReady(), [], 'всё отправлено')
+    c.flush()
+    assert(!fs.existsSync(file), 'пустая очередь — файла нет')
+
+    const d = new ReadReceipts(file, log)
+    for (let i = 0; i < MAX_RECEIPT_IDS + 20; i++) d.add('mm', `x${i}`, '', true)
+    const ids = d.ready('mm')[0].ids
+    eq(ids.length, MAX_RECEIPT_IDS, 'в пакете не больше, чем принимает получатель')
+    eq(ids.at(-1), `x${MAX_RECEIPT_IDS + 19}`, 'остаются самые свежие')
+    d.clear()
+    d.flush()
+    assert(!fs.existsSync(file), 'выключили отметки — очередь очищена')
+
+    // месяц автор не появлялся — отметки выбрасываются
+    let now = Date.now()
+    const e = new ReadReceipts(file, log, () => now)
+    e.add('old', 'o1', '', true)
+    e.flush()
+    now += 31 * 24 * 60 * 60 * 1000
+    eq(new ReadReceipts(file, log, () => now).authorsWithReady(), [], 'устаревшее не загружается')
+    fs.writeFileSync(file, '{broken')
+    eq(new ReadReceipts(file, log).authorsWithReady(), [], 'повреждённый файл не мешает запуску')
+  })
+
+  await test('Напоминание о непрочитанном: по умолчанию каждые 5 минут, мусор отбрасывается', () => {
+    const d = defaultSettings(os.tmpdir())
+    eq(d.notifications.remindMinutes, 5, 'по умолчанию')
+    eq(normalizeSettings({ notifications: { remindMinutes: 0 } }, d).notifications.remindMinutes, 0, 'выключено')
+    eq(normalizeSettings({ notifications: { remindMinutes: 15 } }, d).notifications.remindMinutes, 15, '15 минут')
+    eq(normalizeSettings({ notifications: { remindMinutes: 7 } }, d).notifications.remindMinutes, 5, 'нет такого варианта')
+    eq(normalizeSettings({ notifications: { system: false } }, d).notifications.remindMinutes, 5, 'старый файл настроек')
   })
 
   fs.rmSync(tmp, { recursive: true, force: true })

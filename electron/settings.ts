@@ -12,6 +12,7 @@ import {
   MAX_GROUP_MEMBERS,
   MESSAGE_FONT_SIZE,
   MESSAGE_TONES,
+  REMIND_MINUTES,
   SEND_KEYS,
   THEMES,
   UI_SCALE,
@@ -223,7 +224,8 @@ export function defaultSettings(downloadDir: string): StoredSettings {
       messageTone: 'chime',
       groupTone: 'drop',
       everyoneTone: 'marimba',
-      presenceSound: true
+      presenceSound: true,
+      remindMinutes: 5
     },
     sendKey: 'enter',
     historyRetention: '30d',
@@ -292,7 +294,8 @@ export function normalizeSettings(input: unknown, base: StoredSettings): StoredS
       groupTone: oneOf(notifications.groupTone, MESSAGE_TONES, n.groupTone),
       everyoneTone: oneOf(notifications.everyoneTone, MESSAGE_TONES, n.everyoneTone),
       // presenceSounds — ключ из первой версии настроек
-      presenceSound: asBool(notifications.presenceSound, asBool(raw.presenceSounds, n.presenceSound))
+      presenceSound: asBool(notifications.presenceSound, asBool(raw.presenceSounds, n.presenceSound)),
+      remindMinutes: oneOf<number>(notifications.remindMinutes, REMIND_MINUTES, n.remindMinutes)
     },
     sendKey: oneOf(raw.sendKey, SEND_KEYS, base.sendKey),
     historyRetention: oneOf(raw.historyRetention, HISTORY_RETENTIONS, base.historyRetention),

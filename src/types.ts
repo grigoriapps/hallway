@@ -274,6 +274,11 @@ export type HistoryRetention = (typeof HISTORY_RETENTIONS)[number]
 export const SEND_KEYS = ['enter', 'mod-enter'] as const
 export type SendKey = (typeof SEND_KEYS)[number]
 
+/** как часто напоминать о непрочитанном сообщении, минуты; 0 — не напоминать */
+export const REMIND_MINUTES = [0, 2, 5, 10, 15] as const
+/** сколько раз напомнить о непрочитанном после последнего нового сообщения */
+export const REMIND_MAX_REPEATS = 3
+
 /** через сколько минут бездействия ставить «Отошёл»; 0 — никогда */
 export const AUTO_AWAY_MINUTES = [0, 5, 10, 15, 30] as const
 
@@ -322,6 +327,8 @@ export interface NotificationSettings {
   /** звук сообщения в общем чате */
   everyoneTone: MessageTone
   presenceSound: boolean
+  /** повторить звук и уведомление, если сообщение не прочитано столько минут; 0 — не напоминать */
+  remindMinutes: number
 }
 
 export interface SettingsView {

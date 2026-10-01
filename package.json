@@ -1,7 +1,7 @@
 {
   "name": "hallway",
   "productName": "Hallway",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "Hallway — serverless office messenger for the local network: UDP discovery, TCP chat and file transfer",
   "author": "grigoriapps <grigoriapps@gmail.com>",
   "license": "MIT",

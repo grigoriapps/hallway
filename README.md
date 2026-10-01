@@ -55,6 +55,8 @@ visible in LuLu or Little Snitch (macOS), Windows Firewall or Wireshark.
   image thumbnails
 - Delivered / read receipts, "typing…", replies with quotes, search in a conversation
 - Statuses (Online / Away / Do not disturb), sounds per chat type, notifications, unread badges
+  (Dock on macOS; a red dot on the tray icon and taskbar button on Windows) and reminders about
+  unread messages
 - 7 themes plus "follow system", 5 fonts, interface scale, compact mode
 - Interface languages: English, Русский, Deutsch, Español, Română
 - Manual connection by IP address for networks where broadcast does not pass

@@ -4,6 +4,8 @@
 //   build/icon.png          — 1024×1024 для macOS (electron-builder соберёт из него .icns)
 //   build/icon.ico          — 16…256 px для Windows: exe, установщик, панель задач
 //   src/assets/app-icon.png — логотип внутри интерфейса
+//   build/tray-unread.ico   — значок в трее Windows с красной точкой: есть непрочитанные
+//   build/overlay-unread.ico — красная точка поверх кнопки в панели задач Windows
 const { app, BrowserWindow } = require('electron')
 const fs = require('node:fs')
 const os = require('node:os')
@@ -16,7 +18,27 @@ app.setPath('userData', path.join(os.tmpdir(), 'hallway-icon-render'))
  * Макет нарисован в квадрате 824×824 (сетка иконок macOS: 824 px внутри холста 1024 px).
  * inset — отступ квадрата от края холста, shadow — внешняя тень (только для macOS).
  */
-function iconSvg({ size, inset, shadow }) {
+/** Цвет точки «есть непрочитанные» — как счётчик непрочитанных в интерфейсе */
+const UNREAD_DOT = '#E5484D'
+
+/**
+ * Красная точка с белой каймой в квадрате 1024×1024: cx, cy, r — центр и радиус.
+ * Кайма отделяет точку и от значка, и от панели задач любого цвета.
+ */
+function dotSvg(cx, cy, r) {
+  const ring = Math.max(r * 0.2, 1024 / 16)
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#FFFFFF"/>
+  <circle cx="${cx}" cy="${cy}" r="${r - ring}" fill="${UNREAD_DOT}"/>`
+}
+
+/** Точка для панели задач: Windows рисует её в правом нижнем углу кнопки */
+function overlaySvg(size) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024">
+  ${dotSvg(512, 512, 512)}
+</svg>`
+}
+
+function iconSvg({ size, inset, shadow, unread = false }) {
   const scale = (1024 - inset * 2) / 824
   // До 24 px два пузыря и три точки превращаются в кашу: рисуем один крупный пузырь,
   // а точки оставляем только там, где они не сливаются в полоску
@@ -81,7 +103,8 @@ function iconSvg({ size, inset, shadow }) {
     <rect width="824" height="824" rx="185" fill="url(#bg)"${shadow ? ' filter="url(#outer)"' : ''}/>
     <rect width="824" height="824" rx="185" fill="url(#shine)"/>
     ${bubbles}
-  </g>
+  </g>${unread ? `
+  ${dotSvg(760, 264, 264)}` : ''}
 </svg>`
 }
 
@@ -132,7 +155,7 @@ app
     const win = new BrowserWindow({ show: false, width: 64, height: 64 })
     await win.loadURL('data:text/html,<!doctype html><title>icons</title>')
     const render = async (options) => {
-      const svg = iconSvg(options)
+      const svg = options.overlay ? overlaySvg(options.size) : iconSvg(options)
       const dataUrl = await win.webContents.executeJavaScript(
         `(${rasterize.toString()})(${JSON.stringify(svg)}, ${options.size})`
       )
@@ -155,6 +178,18 @@ app
       images.push({ size, png: await render({ size, inset: size <= 32 ? 0 : 16, shadow: false }) })
     }
     write('build/icon.ico', buildIco(images))
+
+    // Трей: 16 px при 100 % масштабе экрана, до 32 px при 200 %
+    const traySizes = [16, 20, 24, 32, 40, 48, 64]
+    const trayImages = []
+    for (const size of traySizes) {
+      trayImages.push({ size, png: await render({ size, inset: size <= 32 ? 0 : 16, shadow: false, unread: true }) })
+    }
+    write('build/tray-unread.ico', buildIco(trayImages))
+
+    const overlayImages = []
+    for (const size of [16, 20, 24, 32, 40, 48]) overlayImages.push({ size, png: await render({ size, overlay: true }) })
+    write('build/overlay-unread.ico', buildIco(overlayImages))
 
     write('src/assets/app-icon.png', await render({ size: 256, inset: 0, shadow: false }))
     app.quit()

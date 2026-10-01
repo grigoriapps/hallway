@@ -25,6 +25,7 @@ import {
   MAX_GROUPS,
   MAX_GROUP_MEMBERS,
   PRESENCE_STATUSES,
+  REMIND_MAX_REPEATS,
   UI_SCALE,
   isGroupId,
   type ActionResult,
@@ -60,6 +61,7 @@ import { createLogger, type Logger, type ScopedLogger } from './logger'
 import { SettingsStore, type ArchivedChat, type StoredGroup } from './settings'
 import { ConversationStore } from './store'
 import { PeerRegistry } from './peer-registry'
+import { ReadReceipts, type ReceiptBatch } from './read-receipts'
 import { HistoryPersistence, retentionMs, reviveItem } from './history'
 import { Discovery, type PeerInfo } from './discovery'
 import { ChatService, type HelloInfo, type IncomingMessage, type IncomingOffer } from './chat-server'
@@ -71,6 +73,7 @@ import { compareVersions } from '../src/format'
 import { shouldShowWhatsNew } from '../src/whats-new'
 import { buildAppMenu } from './menu'
 import { TrayController, statusMenuItems, type StatusState } from './tray'
+import overlayUnreadIconPath from '../build/overlay-unread.ico?asset'
 
 /**
  * Переводчик главного процесса. Пересоздаётся при смене языка, поэтому в модули
@@ -122,6 +125,8 @@ const EVERYONE_RESYNC_MS = 10 * 60 * 1000
 const EVERYONE_MIN_VERSION = '1.3.0'
 /** сообщение общего чата «живое» (звук и уведомление), а не досланное позже */
 const EVERYONE_LIVE_MS = 60 * 1000
+/** напоминание при возвращении к компьютеру не звучит, если сигнал был только что */
+const REMIND_QUIET_MS = 30 * 1000
 
 let started = false
 let quitting = false
@@ -135,6 +140,7 @@ let configFile = ''
 let settings!: SettingsStore
 let store!: ConversationStore
 let peers!: PeerRegistry
+let receipts!: ReadReceipts
 let history!: HistoryPersistence
 let chat!: ChatService
 let files!: FileTransfers
@@ -193,14 +199,22 @@ let manualStatus: PresenceStatus = 'online'
 let autoAway = false
 let screenLocked = false
 const notifications = new Set<Notification>()
+/** о каких непрочитанных переписках был сигнал: когда и что было в последнем сообщении */
+const unreadAlerts = new Map<string, UnreadAlert>()
+/** сколько раз уже напомнили после последнего нового сообщения */
+let remindCount = 0
+/** последний сигнал о сообщении — новом или напоминании */
+let lastSignalAt = 0
+
+interface UnreadAlert {
+  at: number
+  preview: string
+}
 const peersWithHistory = new Set<string>()
 /** кто сейчас печатает: переписка → участник → имя и таймер угасания */
 const typingPeers = new Map<string, Map<string, { name: string; timer: NodeJS.Timeout }>>()
-/**
- * Входящие сообщения, которые пользователь ещё не видел: отметка «Прочитано» уйдёт
- * при открытии чата. Ключ — автор и переписка: в группе отметка нужна только автору.
- */
-const pendingReceipts = new Map<string, Set<string>>()
+/** авторы, которым прямо сейчас отправляются отметки «прочитано» */
+const receiptsBusy = new Set<string>()
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -247,6 +261,7 @@ async function start(): Promise<void> {
   store = new ConversationStore()
   peers = new PeerRegistry(path.join(userData, 'known-peers.json'), logger.scope('peers'))
   history = new HistoryPersistence(path.join(userData, 'history'), logger.scope('history'))
+  receipts = new ReadReceipts(path.join(userData, 'read-receipts.json'), logger.scope('receipts'))
   const selfId = settings.get().id
 
   chat = new ChatService({
@@ -306,6 +321,8 @@ async function start(): Promise<void> {
   updateTray()
   updateStatusMenus()
   createWindow()
+  // непрочитанное из прошлого запуска — точка в трее, даже если окно не показывается
+  updateUnreadBadges()
 
   try {
     tcpPort = await chat.start()
@@ -323,7 +340,11 @@ async function start(): Promise<void> {
     for (const peer of discovery?.getPeers() ?? []) peers.seen(peer, peer.lastSeen)
   }, 5000)
   setInterval(refreshAutoAway, 15000)
-  setInterval(() => kickOutbox(), OUTBOX_RETRY_MS)
+  setInterval(checkReminders, 15000)
+  setInterval(() => {
+    kickOutbox()
+    kickReceipts()
+  }, OUTBOX_RETRY_MS)
   setInterval(pruneHistory, 60 * 60 * 1000)
   // кому-то сообщение общего чата могло не дойти, хотя он был в сети (обрыв) — сверяемся
   setInterval(() => {
@@ -348,6 +369,7 @@ async function start(): Promise<void> {
     // выключение компьютера: всё несохранённое — на диск сразу
     history.flush()
     peers.flush()
+    receipts.flush()
     void discovery?.sayBye()
   })
   powerMonitor.on('lock-screen', () => {
@@ -412,6 +434,7 @@ function applyLanguage(): void {
     })
   )
   updateStatusMenus()
+  updateUnreadBadges()
   applySpellcheck()
 }
 
@@ -459,6 +482,7 @@ function startDiscovery(): void {
     rememberPeer(peer)
     announceGroupsTo(peer.id)
     kickOutbox(peer.id)
+    void sendReceipts(peer.id)
     if (supportsEveryone(peer)) syncEveryone(peer.id)
     sendGroups()
     presenceChanged(peer, true)
@@ -530,6 +554,9 @@ function refreshAutoAway(): void {
   if (idle === autoAway) return
   autoAway = idle
   if (manualStatus === 'online') onStatusChanged(idle ? 'idle' : 'activity')
+  // вернулся к компьютеру, а сообщение так и не прочитано — напомнить сразу
+  // (если сигнал только что был — сообщение пришло прямо сейчас, второй раз не звеним)
+  if (!idle && Date.now() - lastSignalAt > REMIND_QUIET_MS) remindUnread('back at the computer')
 }
 
 /** С какого момента действует наш статус — уходит коллегам в анонсе («отошёл с 12:26») */
@@ -643,7 +670,24 @@ async function confirmClearHistory(peerId: string | null): Promise<boolean> {
 function sendConversations(): void {
   send(IPC.evConversations, { conversations: store.conversationsSnapshot(), unread: store.unreadSnapshot() })
   schedulePeers()
-  if (process.platform === 'darwin') app.setBadgeCount(store.totalUnread())
+  updateUnreadBadges()
+}
+
+/**
+ * Есть ли непрочитанное — видно и без открытого окна: число на значке в Dock (macOS),
+ * красная точка на значке в трее и на кнопке в панели задач (Windows)
+ */
+function updateUnreadBadges(): void {
+  const total = store.totalUnread()
+  if (process.platform === 'darwin') app.setBadgeCount(total)
+  if (process.platform !== 'win32') return
+  tray?.setUnread(total)
+  const win = mainWindow
+  if (!win || win.isDestroyed()) return
+  win.setOverlayIcon(
+    total > 0 ? nativeImage.createFromPath(overlayUnreadIconPath) : null,
+    total > 0 ? tr('taskbar.unread', { count: total }) : ''
+  )
 }
 
 // ─── «печатает…», «прочитано», закрепление, автоприём ───────────────────────────
@@ -682,41 +726,56 @@ function clearTypingFor(peerId: string): void {
   }
 }
 
-/** scope — id группы или общего чата; у личной переписки его нет */
-const receiptKey = (authorId: string, scope?: string) => `${authorId}|${scope ?? ''}`
-
 function readPacket(ids: string[], scope: string | undefined) {
   return scope === EVERYONE_ID ? { type: 'read', ids, everyone: true } : { type: 'read', ids, groupId: scope }
 }
 
-/** Отметка «прочитано» уходит автору сообщения: в группе и общем чате остальным она не нужна */
+/**
+ * Отметка «прочитано» уходит автору сообщения: в группе и общем чате остальным она не нужна.
+ * Очередь хранится на диске (read-receipts.json): отметка не теряется ни при перезапуске
+ * до прочтения, ни когда автора нет в сети — уйдёт, как только он появится.
+ */
 function queueReadReceipt(authorId: string, messageId: string, scope: string | undefined, viewing: boolean): void {
   if (!settings.get().readReceipts || authorId === settings.get().id) return
-  if (viewing) {
-    void chat.sendBestEffort(authorId, readPacket([messageId], scope))
-    return
-  }
-  const key = receiptKey(authorId, scope)
-  let ids = pendingReceipts.get(key)
-  if (!ids) {
-    ids = new Set()
-    pendingReceipts.set(key, ids)
-  }
-  ids.add(messageId)
+  receipts.add(authorId, messageId, scope ?? '', viewing)
+  if (viewing) void sendReceipts(authorId)
 }
 
 /** Пользователь открыл чат — отправляем «прочитано» за всё, что пришло без него */
 function flushReadReceipts(chatId: string): void {
+  if (!settings.get().readReceipts) return
   const scoped = isGroupId(chatId) || chatId === EVERYONE_ID
-  const suffix = `|${scoped ? chatId : ''}`
-  for (const [key, ids] of [...pendingReceipts.entries()]) {
-    if (!key.endsWith(suffix)) continue
-    const authorId = key.slice(0, key.length - suffix.length)
-    if (!scoped && authorId !== chatId) continue
-    pendingReceipts.delete(key)
-    if (!ids.size || !settings.get().readReceipts) continue
-    void chat.sendBestEffort(authorId, readPacket([...ids].slice(-500), scoped ? chatId : undefined))
+  for (const authorId of receipts.markSeen(chatId, scoped)) void sendReceipts(authorId)
+}
+
+/** Досылаем готовые отметки всем, кто сейчас в сети */
+function kickReceipts(): void {
+  for (const authorId of receipts.authorsWithReady()) void sendReceipts(authorId)
+}
+
+async function sendReceipts(authorId: string): Promise<void> {
+  if (!settings.get().readReceipts || receiptsBusy.has(authorId)) return
+  // автора нет в сети — ждём его появления (peer-online / link-up), без попыток и записей в лог
+  if (!discovery?.getPeer(authorId) && !chat.hasLink(authorId)) return
+  receiptsBusy.add(authorId)
+  try {
+    // пока шла отправка, могли прочитать ещё что-то — досылаем сразу, а не через 30 секунд
+    for (let round = 0; round < 5; round++) {
+      const batches = receipts.ready(authorId)
+      if (!batches.length) return
+      for (const batch of batches) {
+        if (!(await sendReceiptBatch(batch))) return
+      }
+    }
+  } finally {
+    receiptsBusy.delete(authorId)
   }
+}
+
+async function sendReceiptBatch(batch: ReceiptBatch): Promise<boolean> {
+  const ok = await chat.sendBestEffort(batch.authorId, readPacket(batch.ids, batch.scope || undefined))
+  if (ok) receipts.sent(batch)
+  return ok
 }
 
 function isPinned(peerId: string): boolean {
@@ -1180,22 +1239,12 @@ async function showMembersMenu(groupId: string): Promise<void> {
 
 function notifyGroupInvite(group: StoredGroup, peerId: string): void {
   const { notifications: prefs } = settings.get()
-  if (!prefs.system || effectiveStatus() === 'dnd' || !Notification.isSupported()) return
-  const notification = new Notification({
-    title: tr('group.inviteTitle', { name: groupName(group) }),
-    body: tr('group.inviteBody', { name: memberName(group, peerId), count: group.members.length }),
-    silent: true
-  })
-  notifications.add(notification)
-  if (notifications.size > 20) notifications.delete(notifications.values().next().value!)
-  notification.on('click', () => {
-    notifications.delete(notification)
-    activeChatId = group.id
-    showWindow()
-    send(IPC.evOpenChat, group.id)
-  })
-  notification.on('close', () => notifications.delete(notification))
-  notification.show()
+  if (!prefs.system || effectiveStatus() === 'dnd') return
+  showNotification(
+    tr('group.inviteTitle', { name: groupName(group) }),
+    tr('group.inviteBody', { name: memberName(group, peerId), count: group.members.length }),
+    group.id
+  )
 }
 
 /** Миниатюра картинки для предложения файла: до 320 px, JPEG, не больше ~120 КБ */
@@ -1243,8 +1292,11 @@ function wireEvents(): void {
   })
   store.on('unread', (peerId: string, count: number) => {
     send(IPC.evUnread, { peerId, count })
-    if (count === 0) flushReadReceipts(peerId)
-    if (process.platform === 'darwin') app.setBadgeCount(store.totalUnread())
+    if (count === 0) {
+      flushReadReceipts(peerId)
+      unreadAlerts.delete(peerId)
+    }
+    updateUnreadBadges()
   })
   store.on('changed', persist)
 
@@ -1253,6 +1305,7 @@ function wireEvents(): void {
     schedulePeers()
     // есть связь (бывает раньше, чем UDP нашёл коллегу) — самое время отдать очередь
     kickOutbox(peerId)
+    void sendReceipts(peerId)
   })
   chat.on('link-down', schedulePeers)
   chat.on('message', (peerId: string, msg: IncomingMessage) => {
@@ -1670,7 +1723,13 @@ function onIncoming(peerId: string, preview: string): void {
   const win = mainWindow
   const focused = !!win && !win.isDestroyed() && win.isVisible() && win.isFocused()
   const viewing = focused && activeChatId === peerId
-  if (!viewing) store.incrementUnread(peerId)
+  if (!viewing) {
+    store.incrementUnread(peerId)
+    // новое сообщение — отсчёт напоминаний начинается заново
+    unreadAlerts.set(peerId, { at: Date.now(), preview })
+    remindCount = 0
+    lastSignalAt = Date.now()
+  }
 
   const { notifications: prefs } = settings.get()
   const dnd = effectiveStatus() === 'dnd'
@@ -1679,10 +1738,15 @@ function onIncoming(peerId: string, preview: string): void {
   if (focused || dnd) return
 
   if (process.platform === 'win32') win?.flashFrame(true)
-  if (!prefs.system || !Notification.isSupported()) return
+  if (prefs.system) showNotification(chatTitle(peerId), preview, peerId)
+}
+
+/** Системное уведомление; щелчок открывает переписку chatId */
+function showNotification(title: string, body: string, chatId: string): void {
+  if (!Notification.isSupported()) return
   const notification = new Notification({
-    title: chatTitle(peerId),
-    body: preview.length > 180 ? preview.slice(0, 180) + '…' : preview,
+    title,
+    body: body.length > 180 ? body.slice(0, 180) + '…' : body,
     // звук уведомления системы не нужен — есть свой
     silent: true
   })
@@ -1691,12 +1755,61 @@ function onIncoming(peerId: string, preview: string): void {
   if (notifications.size > 20) notifications.delete(notifications.values().next().value!)
   notification.on('click', () => {
     notifications.delete(notification)
-    activeChatId = peerId
+    activeChatId = chatId
     showWindow()
-    send(IPC.evOpenChat, peerId)
+    send(IPC.evOpenChat, chatId)
   })
   notification.on('close', () => notifications.delete(notification))
   notification.show()
+}
+
+// ─── напоминание о непрочитанном ────────────────────────────────────────────────
+// Один звук легко пропустить: наушники сняты, колонки тихие, окно спрятано в трей.
+// Пока сообщение не прочитано, звук и уведомление повторяются раз в N минут, но не больше
+// REMIND_MAX_REPEATS раз после последнего нового сообщения. Когда пользователя нет за
+// компьютером («Отошёл» по бездействию или заблокированный экран), напоминания не тратятся
+// впустую — одно прозвучит сразу, как только он вернётся.
+
+function checkReminders(): void {
+  const minutes = settings.get().notifications.remindMinutes
+  if (!minutes || remindCount >= REMIND_MAX_REPEATS) return
+  if (Date.now() - lastSignalAt < minutes * 60 * 1000) return
+  remindUnread('timer')
+}
+
+/** Переписки, о которых был сигнал и которые всё ещё не прочитаны, — новые первыми */
+function pendingAlerts(): Array<[chatId: string, alert: UnreadAlert]> {
+  const unread = store.unreadSnapshot()
+  for (const chatId of [...unreadAlerts.keys()]) if (!unread[chatId]) unreadAlerts.delete(chatId)
+  return [...unreadAlerts.entries()].sort((a, b) => b[1].at - a[1].at)
+}
+
+function remindUnread(reason: string): void {
+  if (!settings.get().notifications.remindMinutes) return
+  const alerts = pendingAlerts()
+  if (!alerts.length) return
+  // «Не беспокоить» или человека нет за компьютером — звенеть некому
+  if (effectiveStatus() === 'dnd' || autoAway) return
+  const win = mainWindow
+  // окно перед глазами — непрочитанное и так видно в списке
+  if (win && !win.isDestroyed() && win.isVisible() && win.isFocused()) return
+
+  remindCount++
+  lastSignalAt = Date.now()
+  const [newestId, newest] = alerts[0]
+  const unread = store.unreadSnapshot()
+  log.info(`reminder #${remindCount} about unread in ${alerts.length} chat(s) (${reason})`)
+
+  const { notifications: prefs } = settings.get()
+  const tone = toneFor(newestId)
+  if (prefs.messageSound && tone !== 'none') playSound('message', tone)
+  if (process.platform === 'win32') win?.flashFrame(true)
+  if (!prefs.system) return
+  const body =
+    alerts.length === 1
+      ? tr('notify.remindOne', { name: chatTitle(newestId), text: newest.preview })
+      : alerts.map(([chatId]) => tr('notify.remindChat', { name: chatTitle(chatId), count: unread[chatId] ?? 0 })).join(' · ')
+  showNotification(tr('notify.remindTitle'), body, newestId)
 }
 
 // ─── внешний вид ────────────────────────────────────────────────────────────────
@@ -1944,7 +2057,7 @@ function registerIpc(): void {
     if (after.runInBackground !== before.runInBackground) updateTray()
     if (after.openAtLogin !== before.openAtLogin) applyLoginItem(after.openAtLogin)
     if (after.language !== before.language) applyLanguage()
-    if (!after.readReceipts) pendingReceipts.clear()
+    if (!after.readReceipts) receipts.clear()
     send(IPC.evSettings, settings.view())
   })
   handle(IPC.setStatus, (status) => {
@@ -2804,6 +2917,8 @@ function createWindow(): void {
     if (hidden) log.info('started at login: window stays hidden')
     else win.show()
   })
+  // кнопка в панели задач появляется заново при каждом показе окна — и точку ставим заново
+  win.on('show', updateUnreadBadges)
   win.on('focus', () => {
     if (process.platform === 'win32') win.flashFrame(false)
     if (activeChatId) {
@@ -2891,6 +3006,7 @@ async function shutdown(): Promise<void> {
   }
   history.flush()
   peers.flush()
+  receipts.flush()
   tray?.disable()
   // «bye» соседям, но не дольше секунды
   await Promise.race([discovery?.stop(), new Promise((r) => setTimeout(r, 1000))])
