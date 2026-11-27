@@ -49,7 +49,7 @@ export default defineConfig({
     build: {
       outDir: 'out/renderer',
       minify: true,
-      rollupOptions: { input: resolve('index.html') }
+      rollupOptions: { input: { index: resolve('index.html'), popup: resolve('popup.html') } }
     },
     plugins: [react(), productionCsp()]
   }

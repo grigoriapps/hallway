@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
-import { IPC, type LanApi, type Listener, type RevEnvelope } from '../src/types'
+import { IPC, POPUP_ARG, type LanApi, type Listener, type RevEnvelope } from '../src/types'
+import { popupApi } from './popup-preload'
 
 // Мост main ↔ renderer. Renderer работает с contextIsolation + sandbox и не имеет доступа
 // к Node: всё, что ему можно, — это методы ниже.
@@ -62,6 +63,7 @@ const api: LanApi = {
   retryFile: (fileId) => ipcRenderer.invoke(IPC.retryFile, fileId),
   openFile: (fileId) => ipcRenderer.invoke(IPC.openFile, fileId),
   showFileInFolder: (fileId) => ipcRenderer.invoke(IPC.showFile, fileId),
+  openNotificationSettings: () => ipcRenderer.invoke(IPC.openNotificationSettings),
 
   onPeers: subscribe(IPC.evPeers),
   onGroups: subscribe(IPC.evGroups),
@@ -81,4 +83,6 @@ const api: LanApi = {
   onTyping: subscribe(IPC.evTyping)
 }
 
-contextBridge.exposeInMainWorld('api', api)
+// Окошко нового сообщения получает только свой маленький мост, а не всё API окна
+if (process.argv.includes(POPUP_ARG)) contextBridge.exposeInMainWorld('popupApi', popupApi)
+else contextBridge.exposeInMainWorld('api', api)

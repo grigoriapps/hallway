@@ -329,6 +329,13 @@ export interface NotificationSettings {
   presenceSound: boolean
   /** повторить звук и уведомление, если сообщение не прочитано столько минут; 0 — не напоминать */
   remindMinutes: number
+  /**
+   * Окошко с новым сообщением поверх всех окон: висит, пока его не закроют или не прочитают,
+   * в нём можно сразу ответить. Пока оно включено, системное уведомление о сообщении не нужно.
+   */
+  popup: boolean
+  /** macOS: значок в Dock подпрыгивает, пока сообщение не прочитано */
+  dockBounce: boolean
 }
 
 export interface SettingsView {
@@ -385,6 +392,10 @@ export interface Capabilities {
   openAtLogin: boolean
   /** значок в трее (Windows) */
   tray: boolean
+  /** окошко нового сообщения поверх всех окон (пока только macOS) */
+  popup: boolean
+  /** значок в Dock подпрыгивает (macOS) */
+  dockBounce: boolean
 }
 
 export type SoundKind = 'online' | 'offline' | 'message'
@@ -428,6 +439,77 @@ export interface ConversationsReset {
   unread: Record<string, number>
 }
 
+// ─── окошко нового сообщения ────────────────────────────────────────────────────
+// Отдельное маленькое окно поверх всех окон: непрочитанные переписки карточками, в каждой —
+// последние сообщения, быстрый ответ, «Открыть» и «Прочитано». Своё окно, свой preload:
+// ему доступны только эти действия.
+
+/** Сообщение в карточке окошка */
+export interface PopupMessage {
+  id: string
+  /** текст сообщения; у файла — его имя */
+  text: string
+  /** это файл, а не текст */
+  file: boolean
+  /** автор — в группе и общем чате */
+  author?: string
+  timestamp: number
+}
+
+export interface PopupCard {
+  chatId: string
+  kind: 'peer' | 'group' | 'everyone'
+  /** имя собеседника, название группы или «Все» */
+  title: string
+  /** последние непрочитанные, по порядку */
+  messages: PopupMessage[]
+  /** сколько непрочитанных ещё, кроме показанных */
+  more: number
+}
+
+export interface PopupState {
+  cards: PopupCard[]
+  /** сколько ещё непрочитанных переписок не поместилось */
+  moreChats: number
+  locale: Locale
+  appearance: AppearanceSettings
+  sendKey: SendKey
+}
+
+/** флаг запуска окошка: по нему общий preload отдаёт окошку только его мост */
+export const POPUP_ARG = '--hallway-popup'
+
+export const POPUP_IPC = {
+  state: 'popup:state',
+  attention: 'popup:attention',
+  ready: 'popup:ready',
+  reply: 'popup:reply',
+  open: 'popup:open',
+  openApp: 'popup:open-app',
+  markRead: 'popup:mark-read',
+  close: 'popup:close',
+  resize: 'popup:resize',
+  wantKeyboard: 'popup:want-keyboard'
+} as const
+
+export interface PopupApi {
+  platform: string
+  onState(callback: (state: PopupState) => void): Unsubscribe
+  /** напоминание: окошко уже на экране — привлечь внимание ещё раз */
+  onAttention(callback: () => void): Unsubscribe
+  ready(): void
+  reply(chatId: string, text: string): Promise<ActionResult>
+  open(chatId: string): void
+  /** открыть Hallway, не выбирая переписку */
+  openApp(): void
+  markRead(chatId: string): void
+  close(): void
+  /** высота содержимого, CSS px — окно подстраивается под неё */
+  resize(height: number): void
+  /** по окошку щёлкнули, а клавиатура так и не пришла — пусть главный процесс отдаст её */
+  wantKeyboard(): void
+}
+
 export const IPC = {
   getSnapshot: 'app:get-snapshot',
   listColleagues: 'peers:list-colleagues',
@@ -469,6 +551,7 @@ export const IPC = {
   retryFile: 'file:retry',
   openFile: 'file:open',
   showFile: 'file:show-in-folder',
+  openNotificationSettings: 'app:open-notification-settings',
 
   evPeers: 'event:peers',
   evGroups: 'event:groups',
@@ -566,6 +649,8 @@ export interface LanApi {
   retryFile(fileId: string): Promise<void>
   openFile(fileId: string): Promise<void>
   showFileInFolder(fileId: string): Promise<void>
+  /** macOS: системные настройки уведомлений Hallway */
+  openNotificationSettings(): Promise<void>
 
   onPeers(cb: Listener<PeerView[]>): Unsubscribe
   onGroups(cb: Listener<GroupView[]>): Unsubscribe

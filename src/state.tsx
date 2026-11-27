@@ -82,7 +82,9 @@ const initialState: AppState = {
       groupTone: 'drop',
       everyoneTone: 'marimba',
       presenceSound: true,
-      remindMinutes: 5
+      remindMinutes: 5,
+      popup: true,
+      dockBounce: true
     },
     sendKey: 'enter',
     historyRetention: '30d',
@@ -102,7 +104,7 @@ const initialState: AppState = {
   conversations: {},
   unread: {},
   activePeerId: null,
-  capabilities: { openAtLogin: false, tray: false },
+  capabilities: { openAtLogin: false, tray: false, popup: false, dockBounce: false },
   appInfo: { version: '', electron: '', platform: '', arch: '' },
   paths: { logDir: '', configFile: '' },
   searchNonce: 0,

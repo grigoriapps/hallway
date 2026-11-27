@@ -23,6 +23,7 @@ import { PeerRegistry } from '../electron/peer-registry'
 import { MAX_RECEIPT_IDS, ReadReceipts } from '../electron/read-receipts'
 import { shouldShowWhatsNew, whatsNewFor } from '../src/whats-new'
 import { DONATE_URL, DONATE_URL_SHORT } from '../src/donate'
+import { POPUP_MAX_CARDS, POPUP_MAX_MESSAGES, POPUP_MAX_TEXT, popupCard, popupCards } from '../src/popup-model'
 import {
   ARRIVAL_MATCH_MS,
   NetworkArrival,
@@ -934,6 +935,95 @@ async function main() {
     eq(normalizeSettings({ notifications: { remindMinutes: 15 } }, d).notifications.remindMinutes, 15, '15 минут')
     eq(normalizeSettings({ notifications: { remindMinutes: 7 } }, d).notifications.remindMinutes, 5, 'нет такого варианта')
     eq(normalizeSettings({ notifications: { system: false } }, d).notifications.remindMinutes, 5, 'старый файл настроек')
+  })
+
+  await test('Окошко нового сообщения и прыжки значка: включены по умолчанию, выключаются', () => {
+    const d = defaultSettings(os.tmpdir())
+    eq([d.notifications.popup, d.notifications.dockBounce], [true, true], 'по умолчанию включены')
+    const old = normalizeSettings({ notifications: { system: true, remindMinutes: 10 } }, d)
+    eq([old.notifications.popup, old.notifications.dockBounce], [true, true], 'файл настроек 1.3.3 — включены и у обновившихся')
+    const off = normalizeSettings({ notifications: { popup: false, dockBounce: false } }, d)
+    eq([off.notifications.popup, off.notifications.dockBounce], [false, false], 'выключены')
+    const junk = normalizeSettings({ notifications: { popup: 'yes', dockBounce: 1 } }, off)
+    eq([junk.notifications.popup, junk.notifications.dockBounce], [false, false], 'мусор — прежнее значение')
+  })
+
+  await test('Окошко: в карточке — последние непрочитанные входящие, свои и служебные не в счёт', () => {
+    const at = (n: number) => 1_700_000_000_000 + n * 1000
+    const text = (id: string, direction: 'in' | 'out', n: number, extra: Partial<TextItem> = {}): TextItem => ({
+      kind: 'text',
+      id,
+      peerId: 'p1',
+      direction,
+      text: `text ${id}`,
+      timestamp: at(n),
+      status: direction === 'in' ? 'received' : 'sent',
+      ...extra
+    })
+    const file: FileItem = {
+      kind: 'file',
+      id: 'f1',
+      peerId: 'p1',
+      direction: 'in',
+      name: 'report.pdf',
+      size: 10,
+      transferred: 0,
+      speed: 0,
+      status: 'pending',
+      timestamp: at(6)
+    }
+    const items: ChatItem[] = [
+      text('a', 'in', 1),
+      text('b', 'out', 2),
+      { kind: 'event', id: 'e', peerId: 'p1', timestamp: at(3), event: 'peer-online' },
+      text('c', 'in', 4),
+      text('d', 'in', 5),
+      file
+    ]
+    const card = popupCard({ chatId: 'p1', kind: 'peer', title: 'Alice', items, unread: 2 })
+    assert(card, 'карточка есть')
+    eq(card.messages.map((m) => m.id), ['d', 'f1'], 'два последних входящих')
+    eq(card.messages[1], { id: 'f1', text: 'report.pdf', file: true, author: undefined, timestamp: at(6) }, 'файл — по имени')
+    eq(card.more, 0, 'больше нет')
+    const many = popupCard({ chatId: 'p1', kind: 'peer', title: 'Alice', items, unread: 4 })
+    eq(many?.messages.map((m) => m.id), ['c', 'd', 'f1'], `не больше ${POPUP_MAX_MESSAGES}`)
+    eq(many?.more, 1, 'остальные — числом')
+    const tooMany = popupCard({ chatId: 'p1', kind: 'peer', title: 'Alice', items, unread: 99 })
+    eq(tooMany?.more, 1, 'счётчик больше, чем сообщений, — считаем по сообщениям')
+    eq(popupCard({ chatId: 'p1', kind: 'peer', title: 'Alice', items, unread: 0 }), null, 'прочитано — карточки нет')
+    eq(popupCard({ chatId: 'p1', kind: 'peer', title: 'Alice', items: [text('x', 'out', 1)], unread: 1 }), null, 'показать нечего')
+  })
+
+  await test('Окошко: автор в группе и общем чате, длинный текст обрезается, лишние переписки — числом', () => {
+    const msg = (chatId: string, author: string, body: string): TextItem => ({
+      kind: 'text',
+      id: `${chatId}-m`,
+      peerId: chatId,
+      direction: 'in',
+      text: body,
+      timestamp: 1,
+      status: 'received',
+      authorId: 'a1',
+      authorName: author
+    })
+    const group = popupCard({ chatId: 'g-1', kind: 'group', title: 'Team', items: [msg('g-1', 'Bob', 'hi')], unread: 1 })
+    eq(group?.messages[0].author, 'Bob', 'в группе — автор')
+    const long = 'x'.repeat(POPUP_MAX_TEXT + 50)
+    const everyone = popupCard({ chatId: 'everyone', kind: 'everyone', title: 'All', items: [msg('everyone', 'Carol', long)], unread: 1 })
+    eq(everyone?.messages[0].author, 'Carol', 'в общем чате — автор')
+    eq(everyone?.messages[0].text.length, POPUP_MAX_TEXT + 1, 'обрезано, с многоточием')
+    assert(everyone?.messages[0].text.endsWith('…'), 'многоточие в конце')
+    const chats = Array.from({ length: POPUP_MAX_CARDS + 2 }, (_, i) => ({
+      chatId: `p${i}`,
+      kind: 'peer' as const,
+      title: `P${i}`,
+      items: [msg(`p${i}`, '', 'hey')],
+      unread: i === 1 ? 0 : 1
+    }))
+    const { cards, moreChats } = popupCards(chats)
+    eq(cards.map((c) => c.chatId), ['p0', 'p2', 'p3', 'p4'], 'по порядку, прочитанные пропущены')
+    eq(moreChats, 1, 'не поместилась одна')
+    eq(cards[0].messages[0].author, undefined, 'в личной переписке автора не пишем')
   })
 
   fs.rmSync(tmp, { recursive: true, force: true })

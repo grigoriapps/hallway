@@ -1526,6 +1526,60 @@ const MESSAGES = {
   ],
   'notify.remindOne': ['{name}: {text}', '{name}: {text}', '{name}: {text}', '{name}: {text}', '{name}: {text}'],
   'notify.remindChat': ['{name} ({count})', '{name} ({count})', '{name} ({count})', '{name} ({count})', '{name} ({count})'],
+  // окошко нового сообщения
+  'popup.windowTitle': [
+    'Новые сообщения — Hallway',
+    'New messages — Hallway',
+    'Mesaje noi — Hallway',
+    'Neue Nachrichten – Hallway',
+    'Mensajes nuevos — Hallway'
+  ],
+  'popup.open': ['Открыть', 'Open', 'Deschide', 'Öffnen', 'Abrir'],
+  'popup.markRead': ['Прочитано', 'Mark as read', 'Marchează citit', 'Gelesen', 'Marcar como leído'],
+  'popup.markReadHint': [
+    'Отметить прочитанным, не открывая переписку',
+    'Mark as read without opening the conversation',
+    'Marchează ca citit fără a deschide conversația',
+    'Als gelesen markieren, ohne den Chat zu öffnen',
+    'Marcar como leído sin abrir la conversación'
+  ],
+  'popup.replyPlaceholder': ['Ответить…', 'Reply…', 'Răspunde…', 'Antworten…', 'Responder…'],
+  'popup.replyEveryonePlaceholder': [
+    'Ответить всем…',
+    'Reply to everyone…',
+    'Răspunde tuturor…',
+    'Allen antworten…',
+    'Responder a todos…'
+  ],
+  'popup.moreMessages': [
+    'Ещё сообщений: {n}',
+    'More messages: {n}',
+    'Mai multe mesaje: {n}',
+    'Weitere Nachrichten: {n}',
+    'Más mensajes: {n}'
+  ],
+  'popup.moreChats': [
+    'Других переписок с непрочитанным: {n}',
+    'Other conversations with unread messages: {n}',
+    'Alte conversații cu mesaje necitite: {n}',
+    'Weitere Chats mit ungelesenen Nachrichten: {n}',
+    'Otras conversaciones con mensajes sin leer: {n}'
+  ],
+  'popup.openApp': ['Открыть Hallway', 'Open Hallway', 'Deschide Hallway', 'Hallway öffnen', 'Abrir Hallway'],
+  'popup.sendHintEnter': [
+    'Enter — отправить, Shift+Enter — новая строка',
+    'Enter to send, Shift+Enter for a new line',
+    'Enter — trimite, Shift+Enter — rând nou',
+    'Enter – senden, Umschalt+Enter – neue Zeile',
+    'Enter para enviar, Mayús+Enter para una línea nueva'
+  ],
+  'popup.sendHintMod': [
+    '{key}+Enter — отправить',
+    '{key}+Enter to send',
+    '{key}+Enter — trimite',
+    '{key}+Enter – senden',
+    '{key}+Enter para enviar'
+  ],
   'notify.filePrefix': ['Файл: {name}', 'File: {name}', 'Fișier: {name}', 'Datei: {name}', 'Archivo: {name}'],
   'notify.groupPrefix': ['{name}: {text}', '{name}: {text}', '{name}: {text}', '{name}: {text}', '{name}: {text}'],
 
@@ -2083,6 +2137,41 @@ const MESSAGES = {
     ' Sunetul mesajelor este oprit mai sus.',
     ' Der Nachrichtenton ist oben gerade ausgeschaltet.',
     ' Ahora mismo el sonido de mensajes está desactivado más arriba.'
+  ],
+  'settings.popup': [
+    'Окошко с новым сообщением поверх всех окон',
+    'Pop-up with new messages on top of all windows',
+    'Fereastră cu mesajele noi deasupra tuturor ferestrelor',
+    'Fenster mit neuen Nachrichten über allen Fenstern',
+    'Ventana con los mensajes nuevos sobre todas las ventanas'
+  ],
+  'settings.popupHint': [
+    'Не исчезает само: висит в углу экрана, пока вы его не закроете или не прочитаете сообщение, и в нём можно сразу ответить. Если вы отошли от компьютера или включено «Не беспокоить», окошко появится, когда вернётесь. Пока оно включено, системное уведомление о сообщении не показывается.',
+    'It doesn’t disappear on its own: it stays in the corner of the screen until you close it or read the message, and you can reply right there. If you are away from the computer or in “Do not disturb”, it appears when you come back. While it is on, no system notification is shown for messages.',
+    'Nu dispare singură: rămâne în colțul ecranului până o închideți sau citiți mesajul, iar din ea puteți răspunde imediat. Dacă sunteți departe de computer sau în modul „Nu deranja”, apare când reveniți. Cât timp este activă, nu se afișează notificarea de sistem pentru mesaje.',
+    'Es verschwindet nicht von selbst: Es bleibt in der Bildschirmecke, bis Sie es schließen oder die Nachricht lesen, und Sie können direkt darin antworten. Sind Sie nicht am Computer oder ist „Nicht stören“ aktiv, erscheint es, sobald Sie zurück sind. Solange es aktiv ist, wird für Nachrichten keine Systembenachrichtigung angezeigt.',
+    'No desaparece sola: se queda en la esquina de la pantalla hasta que la cierres o leas el mensaje, y puedes responder ahí mismo. Si te alejaste del ordenador o tienes «No molestar», aparece cuando vuelvas. Mientras está activada, no se muestra la notificación del sistema para los mensajes.'
+  ],
+  'settings.dockBounce': [
+    'Значок в Dock подпрыгивает, пока сообщение не прочитано',
+    'Dock icon bounces until the message is read',
+    'Pictograma din Dock sare până când mesajul este citit',
+    'Dock-Symbol hüpft, bis die Nachricht gelesen ist',
+    'El icono del Dock rebota hasta que se lea el mensaje'
+  ],
+  'settings.macAlertsHint': [
+    'Системное уведомление на Mac само исчезает через несколько секунд. Чтобы оно оставалось на экране, выберите для Hallway стиль «Оповещения» в настройках уведомлений macOS.',
+    'On a Mac, a system notification disappears after a few seconds. To keep it on screen, choose the “Alerts” style for Hallway in the macOS notification settings.',
+    'Pe Mac, notificarea de sistem dispare după câteva secunde. Ca să rămână pe ecran, alegeți stilul „Alerte” pentru Hallway în setările de notificări macOS.',
+    'Auf dem Mac verschwindet eine Systembenachrichtigung nach ein paar Sekunden. Damit sie stehen bleibt, wählen Sie für Hallway in den macOS-Mitteilungseinstellungen den Stil „Hinweise“.',
+    'En el Mac, la notificación del sistema desaparece a los pocos segundos. Para que se quede en pantalla, elige el estilo «Alertas» para Hallway en los ajustes de notificaciones de macOS.'
+  ],
+  'settings.openMacNotifications': [
+    'Открыть настройки уведомлений macOS',
+    'Open macOS notification settings',
+    'Deschide setările de notificări macOS',
+    'macOS-Mitteilungseinstellungen öffnen',
+    'Abrir los ajustes de notificaciones de macOS'
   ],
   'settings.remind': [
     'Напоминать о непрочитанном',

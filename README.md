@@ -57,6 +57,10 @@ visible in LuLu or Little Snitch (macOS), Windows Firewall or Wireshark.
 - Statuses (Online / Away / Do not disturb), sounds per chat type, notifications, unread badges
   (Dock on macOS; a red dot on the tray icon and taskbar button on Windows) and reminders about
   unread messages
+- macOS: a pop-up with new messages in the corner of the screen, on top of all windows (full-screen
+  apps too). It stays until you deal with it: reply right there, mark as read or open the
+  conversation. If you are away or in "Do not disturb", it waits until you are back. The Dock icon
+  bounces until the message is read. Both can be turned off in Settings → Notifications
 - 7 themes plus "follow system", 5 fonts, interface scale, compact mode
 - Interface languages: English, Русский, Deutsch, Español, Română
 - Manual connection by IP address for networks where broadcast does not pass

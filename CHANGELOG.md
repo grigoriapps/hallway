@@ -7,6 +7,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.3.4] — 2026-11-27
+
+### Added
+
+- **A pop-up with new messages on top of all windows (macOS).** A sound and a system banner are easy
+  to miss: the banner disappears after a few seconds. Now a new message shows up in a small pop-up in
+  the top-right corner of the screen — on top of all windows and full-screen apps, on the display
+  where the pointer is. It doesn't go away on its own: it lists the latest unread messages of each
+  conversation (direct, group, everyone chat), with a **quick reply** field (Enter sends), plus
+  "Open" and "Mark as read". It appears without taking focus, so whatever you are typing in another
+  app never ends up in Hallway. If you are away, the screen is locked or "Do not disturb" is on, the
+  pop-up waits and appears when you are back. An unread reminder brings a closed pop-up back or
+  shakes an open one. While the pop-up is on, no system notification is shown for messages. It is
+  excluded from screen sharing (where the sharing app honours that).
+- **The Dock icon bounces** until the message is read (macOS).
+- Both are on by default and can be turned off in Settings → Notifications. With the pop-up off,
+  that page explains how to keep macOS notifications on screen (the "Alerts" style) and has a button
+  that opens those macOS settings.
+
 ## [1.3.3] — 2026-09-30
 
 ### Added
@@ -359,7 +378,8 @@ The first public release. Earlier builds were not published.
 - Works only within the local network; between different subnets you need to add IP addresses manually.
 - The Windows part (tray, start at login, system buttons in the title bar) was built and tested on macOS.
 
-[Unreleased]: https://github.com/grigoriapps/hallway/compare/v1.3.3...HEAD
+[Unreleased]: https://github.com/grigoriapps/hallway/compare/v1.3.4...HEAD
+[1.3.4]: https://github.com/grigoriapps/hallway/releases/tag/v1.3.4
 [1.3.3]: https://github.com/grigoriapps/hallway/releases/tag/v1.3.3
 [1.3.2]: https://github.com/grigoriapps/hallway/releases/tag/v1.3.2
 [1.3.1]: https://github.com/grigoriapps/hallway/releases/tag/v1.3.1

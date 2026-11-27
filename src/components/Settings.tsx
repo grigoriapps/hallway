@@ -424,17 +424,42 @@ function NotificationsTab() {
   const { state } = useApp()
   const t = useT()
   const n = state.settings.notifications
+  const { capabilities } = state
+  const isMac = window.api.platform === 'darwin'
 
   return (
     <>
       <Section title={t('settings.whenHappens')}>
         <div className="settings-stack">
+          {capabilities.popup && (
+            <Toggle
+              checked={n.popup}
+              onChange={(popup) => update({ notifications: { popup } })}
+              label={t('settings.popup')}
+              hint={t('settings.popupHint')}
+            />
+          )}
+          {capabilities.dockBounce && (
+            <Toggle
+              checked={n.dockBounce}
+              onChange={(dockBounce) => update({ notifications: { dockBounce } })}
+              label={t('settings.dockBounce')}
+            />
+          )}
           <Toggle
             checked={n.system}
             onChange={(system) => update({ notifications: { system } })}
             label={t('settings.systemNotifications')}
             hint={t('settings.systemNotificationsHint')}
           />
+          {isMac && n.system && !(capabilities.popup && n.popup) && (
+            <div className="settings-note">
+              <p className="hint">{t('settings.macAlertsHint')}</p>
+              <button className="btn" onClick={() => void window.api.openNotificationSettings()}>
+                {t('settings.openMacNotifications')}
+              </button>
+            </div>
+          )}
           <Toggle
             checked={n.messageSound}
             onChange={(messageSound) => update({ notifications: { messageSound } })}

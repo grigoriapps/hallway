@@ -40,6 +40,7 @@ import {
   type MessageTone,
   type NetworkStatus,
   type PeerView,
+  type PopupState,
   type PresenceStatus,
   type RevEnvelope,
   type SelfInfo,
@@ -73,6 +74,8 @@ import { compareVersions } from '../src/format'
 import { shouldShowWhatsNew } from '../src/whats-new'
 import { buildAppMenu } from './menu'
 import { TrayController, statusMenuItems, type StatusState } from './tray'
+import { PopupWindow, popupPreloadPath } from './popup'
+import { popupCards } from '../src/popup-model'
 import overlayUnreadIconPath from '../build/overlay-unread.ico?asset'
 
 /**
@@ -127,6 +130,11 @@ const EVERYONE_MIN_VERSION = '1.3.0'
 const EVERYONE_LIVE_MS = 60 * 1000
 /** напоминание при возвращении к компьютеру не звучит, если сигнал был только что */
 const REMIND_QUIET_MS = 30 * 1000
+/**
+ * Окошко нового сообщения поверх всех окон. Пока только macOS: на Windows поведение окон
+ * поверх всех, фокуса и панели задач другое — включим после проверки там.
+ */
+const POPUP_SUPPORTED = process.platform === 'darwin'
 
 let started = false
 let quitting = false
@@ -145,6 +153,9 @@ let history!: HistoryPersistence
 let chat!: ChatService
 let files!: FileTransfers
 let tray: TrayController | null = null
+let popup: PopupWindow | null = null
+/** macOS: id текущего «прыжка» значка в Dock; -1 — не прыгает */
+let bounceId = -1
 let discovery: Discovery | null = null
 let tcpPort: number | null = null
 let startupError: string | null = null
@@ -294,7 +305,9 @@ async function start(): Promise<void> {
   applySpellcheck()
   applyNativeTheme()
   nativeTheme.on('updated', () => {
-    if (settings.get().appearance.theme === 'system') applyWindowChrome()
+    if (settings.get().appearance.theme !== 'system') return
+    applyWindowChrome()
+    popup?.refreshChrome()
   })
 
   tray = new TrayController({
@@ -305,6 +318,7 @@ async function start(): Promise<void> {
     getStatus: statusState
   })
 
+  if (POPUP_SUPPORTED) popup = createPopup()
   wireEvents()
   registerIpc()
   Menu.setApplicationMenu(
@@ -379,6 +393,7 @@ async function start(): Promise<void> {
   powerMonitor.on('unlock-screen', () => {
     screenLocked = false
     refreshAutoAway()
+    showPopup('screen unlocked')
   })
 }
 
@@ -575,6 +590,9 @@ function onStatusChanged(reason: string): void {
   send(IPC.evSelf, selfInfo())
   discovery?.announce()
   updateStatusMenus()
+  // «Не беспокоить» — окошко убираем; вернулись в «В сети» — показываем то, что ждало
+  if (effectiveStatus() === 'dnd') popup?.hide()
+  else showPopup(`status ${reason}`)
 }
 
 function updateStatusMenus(): void {
@@ -679,6 +697,7 @@ function sendConversations(): void {
  */
 function updateUnreadBadges(): void {
   const total = store.totalUnread()
+  if (total === 0) cancelBounce()
   if (process.platform === 'darwin') app.setBadgeCount(total)
   if (process.platform !== 'win32') return
   tray?.setUnread(total)
@@ -1297,6 +1316,7 @@ function wireEvents(): void {
       unreadAlerts.delete(peerId)
     }
     updateUnreadBadges()
+    refreshPopup()
   })
   store.on('changed', persist)
 
@@ -1592,6 +1612,7 @@ function wokeUp(reason: string): void {
   quietUntil = Date.now() + config.peerTimeoutMs + 5000
   discovery?.handleResume()
   refreshAutoAway()
+  showPopup('woke up')
 }
 
 /** Раз в 5 секунд: не проснулись ли мы без события resume */
@@ -1738,7 +1759,10 @@ function onIncoming(peerId: string, preview: string): void {
   if (focused || dnd) return
 
   if (process.platform === 'win32') win?.flashFrame(true)
-  if (prefs.system) showNotification(chatTitle(peerId), preview, peerId)
+  bounceDock()
+  // окошко заменяет системное уведомление; если человека нет — оно дождётся его возвращения
+  if (popupEnabled()) showPopup('new message')
+  else if (prefs.system) showNotification(chatTitle(peerId), preview, peerId)
 }
 
 /** Системное уведомление; щелчок открывает переписку chatId */
@@ -1791,8 +1815,9 @@ function remindUnread(reason: string): void {
   // «Не беспокоить» или человека нет за компьютером — звенеть некому
   if (effectiveStatus() === 'dnd' || autoAway) return
   const win = mainWindow
-  // окно перед глазами — непрочитанное и так видно в списке
+  // окно перед глазами — непрочитанное и так видно в списке; в окошке уже отвечают
   if (win && !win.isDestroyed() && win.isVisible() && win.isFocused()) return
+  if (popup?.isFocused()) return
 
   remindCount++
   lastSignalAt = Date.now()
@@ -1804,12 +1829,140 @@ function remindUnread(reason: string): void {
   const tone = toneFor(newestId)
   if (prefs.messageSound && tone !== 'none') playSound('message', tone)
   if (process.platform === 'win32') win?.flashFrame(true)
+  bounceDock()
+  if (popupEnabled()) {
+    if (popup?.isVisible()) popup.attention()
+    else showPopup(`reminder (${reason})`)
+    return
+  }
   if (!prefs.system) return
   const body =
     alerts.length === 1
       ? tr('notify.remindOne', { name: chatTitle(newestId), text: newest.preview })
       : alerts.map(([chatId]) => tr('notify.remindChat', { name: chatTitle(chatId), count: unread[chatId] ?? 0 })).join(' · ')
   showNotification(tr('notify.remindTitle'), body, newestId)
+}
+
+// ─── окошко нового сообщения и значок в Dock ────────────────────────────────────
+// Звук и баннер легко пропустить. Окошко висит в углу экрана поверх всех окон, пока
+// сообщение не прочитают или окошко не закроют; в нём можно сразу ответить. Если человека
+// нет (отошёл, экран заблокирован, «Не беспокоить», сон) — окошко ждёт и появляется, когда
+// он вернётся. Пока окно Hallway перед глазами, окошко не нужно: непрочитанное видно в списке.
+
+function createPopup(): PopupWindow {
+  const devUrl = !app.isPackaged && process.env.ELECTRON_RENDERER_URL
+  return new PopupWindow({
+    preload: popupPreloadPath(__dirname),
+    devUrl: devUrl ? `${devUrl.replace(/\/$/, '')}/popup.html` : undefined,
+    file: path.join(__dirname, '../renderer/popup.html'),
+    backgroundColor: () => windowChrome().bg,
+    title: () => tr('popup.windowTitle'),
+    zoom: () => settings.get().appearance.uiScale / 100,
+    log: logger.scope('popup'),
+    handlers: {
+      reply: popupReply,
+      open: (chatId) => {
+        log.info(`popup: open chat ${chatId.slice(0, 8)}`)
+        popup?.hide()
+        activeChatId = chatId
+        showWindow()
+        send(IPC.evOpenChat, chatId)
+      },
+      openApp: () => {
+        popup?.hide()
+        showWindow()
+      },
+      markRead: (chatId) => {
+        log.info(`popup: chat ${chatId.slice(0, 8)} marked as read`)
+        store.clearUnread(chatId)
+        flushReadReceipts(chatId)
+      },
+      closed: () => {
+        log.info('popup closed by user')
+        cancelBounce()
+      },
+      focused: cancelBounce
+    }
+  })
+}
+
+function popupEnabled(): boolean {
+  return !!popup && settings.get().notifications.popup
+}
+
+/** Человек за компьютером и не просил его не беспокоить */
+function userPresent(): boolean {
+  return effectiveStatus() === 'online' && !screenLocked && !suspended
+}
+
+function mainWindowFocused(): boolean {
+  const win = mainWindow
+  return !!win && !win.isDestroyed() && win.isVisible() && win.isFocused()
+}
+
+/** Непрочитанные переписки, о которых был сигнал, — новые сверху */
+function popupState(): PopupState {
+  const unread = store.unreadSnapshot()
+  const { cards, moreChats } = popupCards(
+    pendingAlerts().map(([chatId]) => ({
+      chatId,
+      kind: chatId === EVERYONE_ID ? 'everyone' : isGroupId(chatId) ? 'group' : 'peer',
+      title: chatTitle(chatId),
+      items: store.items(chatId),
+      unread: unread[chatId] ?? 0
+    }))
+  )
+  const s = settings.get()
+  return { cards, moreChats, locale: translator.locale, appearance: s.appearance, sendKey: s.sendKey }
+}
+
+/** Показать окошко, если есть что показать и человек на месте; иначе оно подождёт */
+function showPopup(reason: string): void {
+  if (!popup || !popupEnabled() || !userPresent() || mainWindowFocused()) return
+  const state = popupState()
+  if (!state.cards.length) return
+  if (!popup.isVisible()) log.info(`popup: showing ${state.cards.length} chat(s) (${reason})`)
+  popup.show(state)
+}
+
+/** Что-то прочитали, сменились настройки — окошко на экране обновляется или прячется */
+function refreshPopup(): void {
+  if (!popup?.isShown()) return
+  const state = popupState()
+  if (!popupEnabled() || effectiveStatus() === 'dnd' || !state.cards.length) popup.hide()
+  else popup.update(state)
+}
+
+/** Быстрый ответ из окошка: обычная отправка, а переписка считается прочитанной */
+function popupReply(chatId: string, text: string): ActionResult {
+  let clean: string
+  try {
+    clean = cleanMessageText(text)
+  } catch (err) {
+    return { ok: false, error: (err as Error).message }
+  }
+  if (!clean) return { ok: false }
+  if (isGroupId(chatId) && !settings.getGroup(chatId)) return { ok: false, error: tr('group.notFound') }
+  log.info(`popup: quick reply to ${chatId.slice(0, 8)}`)
+  startOutgoing(chatId, clean)
+  store.clearUnread(chatId)
+  flushReadReceipts(chatId)
+  return { ok: true }
+}
+
+/** macOS: значок в Dock прыгает, пока Hallway не откроют (или не прочитают сообщение) */
+function bounceDock(): void {
+  if (process.platform !== 'darwin' || !settings.get().notifications.dockBounce) return
+  // человек уже отвечает в окошке — прыгать незачем
+  if (popup?.isFocused()) return
+  cancelBounce()
+  bounceId = app.dock?.bounce('critical') ?? -1
+}
+
+function cancelBounce(): void {
+  if (bounceId < 0) return
+  app.dock?.cancelBounce(bounceId)
+  bounceId = -1
 }
 
 // ─── внешний вид ────────────────────────────────────────────────────────────────
@@ -1968,7 +2121,12 @@ function registerIpc(): void {
       conversations: store.conversationsSnapshot(),
       unread: store.unreadSnapshot(),
       activeChatId,
-      capabilities: { openAtLogin: app.isPackaged, tray: process.platform === 'win32' },
+      capabilities: {
+        openAtLogin: app.isPackaged,
+        tray: process.platform === 'win32',
+        popup: POPUP_SUPPORTED,
+        dockBounce: process.platform === 'darwin'
+      },
       appInfo: {
         version: app.getVersion(),
         electron: process.versions.electron,
@@ -2050,7 +2208,9 @@ function registerIpc(): void {
     if (after.appearance.theme !== before.appearance.theme) {
       applyNativeTheme()
       applyWindowChrome()
+      popup?.refreshChrome()
     }
+    if (!after.notifications.dockBounce) cancelBounce()
     if (after.appearance.uiScale !== before.appearance.uiScale) applyZoom()
     if (after.historyRetention !== before.historyRetention) onRetentionChanged()
     if (after.autoAwayMinutes !== before.autoAwayMinutes) refreshAutoAway()
@@ -2059,6 +2219,7 @@ function registerIpc(): void {
     if (after.language !== before.language) applyLanguage()
     if (!after.readReceipts) receipts.clear()
     send(IPC.evSettings, settings.view())
+    refreshPopup()
   })
   handle(IPC.setStatus, (status) => {
     if (PRESENCE_STATUSES.includes(status as PresenceStatus)) setManualStatus(status as PresenceStatus)
@@ -2289,6 +2450,12 @@ function registerIpc(): void {
   handle(IPC.showFile, (fileId) => {
     const target = isId(fileId) ? files.localPath(fileId) : null
     if (target) shell.showItemInFolder(target)
+  })
+  handle(IPC.openNotificationSettings, async () => {
+    if (process.platform !== 'darwin') return
+    // страница уведомлений Hallway в «Системных настройках» (macOS 13+); на старых — общая
+    const url = 'x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.hallway.app'
+    await shell.openExternal(url).catch((err: Error) => log.warn(`open notification settings failed: ${err.message}`))
   })
 }
 
@@ -2921,6 +3088,9 @@ function createWindow(): void {
   win.on('show', updateUnreadBadges)
   win.on('focus', () => {
     if (process.platform === 'win32') win.flashFrame(false)
+    // окно Hallway перед глазами — окошко не нужно, непрочитанное видно в списке
+    popup?.hide()
+    cancelBounce()
     if (activeChatId) {
       store.clearUnread(activeChatId)
       flushReadReceipts(activeChatId)
@@ -2942,6 +3112,8 @@ function createWindow(): void {
   })
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
+    // окно закрыто совсем (Windows без трея): спрятанное окошко не должно держать программу
+    popup?.destroy()
   })
   // Windows: выключение компьютера или выход из системы — успеть сказать соседям «bye»
   win.on('session-end', () => {
@@ -3008,6 +3180,8 @@ async function shutdown(): Promise<void> {
   peers.flush()
   receipts.flush()
   tray?.disable()
+  // окошко прячется на закрытие и иначе остановило бы выход
+  popup?.destroy()
   // «bye» соседям, но не дольше секунды
   await Promise.race([discovery?.stop(), new Promise((r) => setTimeout(r, 1000))])
   chat.stop()

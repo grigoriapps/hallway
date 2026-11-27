@@ -225,7 +225,9 @@ export function defaultSettings(downloadDir: string): StoredSettings {
       groupTone: 'drop',
       everyoneTone: 'marimba',
       presenceSound: true,
-      remindMinutes: 5
+      remindMinutes: 5,
+      popup: true,
+      dockBounce: true
     },
     sendKey: 'enter',
     historyRetention: '30d',
@@ -295,7 +297,9 @@ export function normalizeSettings(input: unknown, base: StoredSettings): StoredS
       everyoneTone: oneOf(notifications.everyoneTone, MESSAGE_TONES, n.everyoneTone),
       // presenceSounds — ключ из первой версии настроек
       presenceSound: asBool(notifications.presenceSound, asBool(raw.presenceSounds, n.presenceSound)),
-      remindMinutes: oneOf<number>(notifications.remindMinutes, REMIND_MINUTES, n.remindMinutes)
+      remindMinutes: oneOf<number>(notifications.remindMinutes, REMIND_MINUTES, n.remindMinutes),
+      popup: asBool(notifications.popup, n.popup),
+      dockBounce: asBool(notifications.dockBounce, n.dockBounce)
     },
     sendKey: oneOf(raw.sendKey, SEND_KEYS, base.sendKey),
     historyRetention: oneOf(raw.historyRetention, HISTORY_RETENTIONS, base.historyRetention),
